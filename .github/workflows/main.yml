@@ -1,9 +1,11 @@
 name: CI
+
 on:
   push:
     branches:
       - main
   pull_request:
+
 jobs:
   sast_scan:
     name: Run Static Code Scan
@@ -23,39 +25,56 @@ jobs:
           output: 'trivy-results.sarif'
           severity: 'CRITICAL'
 
-      - name: Upload build artifact
-        uses: actions/upload-artifact@v4.4.3
+      - name: Upload Trivy scan artifact
+        uses: actions/upload-artifact@v4
         with:
           name: trivy-results
           path: trivy-results.sarif
-  image_scan:
-       name: Build Image and Run Image Scan
-       runs-on: ubuntu-latest
+          if-no-files-found: warn
 
-       steps:
-       - name: Checkout code
-         uses: actions/checkout@v4
-    
-       - name: Set up Docker
-         uses: docker-practice/actions-setup-docker@v1
-         with:
+  image_scan:
+    name: Build Image and Run Docker Scout Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.REPO_USER }}
+          password: ${{ secrets.REPO_PWD }}
+
+      - name: Set up Docker
+        uses: docker-practice/actions-setup-docker@v1
+        with:
           docker_version: '20.10.7'
-    
-       - name: Build Docker Image
-         run: docker build -f Dockerfile -t pygoat_app:latest .
-        
-       - name: Docker Scout Scan
-         uses: docker/scout-action@v1.15.0
-         with:
-           dockerhub-user: ${{ secrets.REPO_USER }}
-           dockerhub-password: ${{ secrets.REPO_PWD }}
-           command: quickview,cves
-           only-severities: critical,high
-           sarif-file: scout-report.sarif
-    
-       - name: Upload Artifact
-         uses: actions/upload-artifact@v4
-         if: always()
-         with:
-           name: docker-scout-findings
-           path: scout-report.sarif
+
+      - name: Build Docker Image
+        run: docker build -f Dockerfile -t pygoat_app:latest .
+
+      - name: Run Docker Scout Scan
+        uses: docker/scout-action@v1.15.0
+        id: docker-scout
+        with:
+          dockerhub-user: ${{ secrets.REPO_USER }}
+          dockerhub-password: ${{ secrets.REPO_PWD }}
+          command: quickview,cves
+          only-severities: critical,high
+          sarif-file: scout-report.sarif
+
+      - name: Debug SARIF file
+        run: |
+          if [ -f scout-report.sarif ]; then
+            echo "SARIF file exists:"
+            ls -l scout-report.sarif
+          else
+            echo "SARIF file not found!"
+          fi
+
+      - name: Upload Docker Scout Artifact
+        uses: actions/upload-artifact@v4
+        continue-on-error: true
+        with:
+          name: docker-scout-findings
+          path: scout-report.sarif
