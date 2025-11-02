@@ -39,6 +39,15 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Ensure Docker daemon config exists
+        run: |
+           if [ ! -f /etc/docker/daemon.json ]; then
+            echo '{}' | sudo tee /etc/docker/daemon.json
+            echo "Created empty /etc/docker/daemon.json"
+           else 
+            echo "/etc/docker/daemon.json already exists"
+           fi
+
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
